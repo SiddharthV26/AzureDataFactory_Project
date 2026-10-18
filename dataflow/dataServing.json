@@ -17,6 +17,13 @@
 						"type": "LinkedServiceReference"
 					},
 					"name": "FactBooking"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_datalake",
+						"type": "LinkedServiceReference"
+					},
+					"name": "DimFlight"
 				}
 			],
 			"sinks": [
@@ -26,6 +33,13 @@
 						"type": "LinkedServiceReference"
 					},
 					"name": "sinkGold"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_datalake",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkGoldFlight"
 				}
 			],
 			"transformations": [
@@ -46,6 +60,24 @@
 				},
 				{
 					"name": "alterRow"
+				},
+				{
+					"name": "FlightJoin"
+				},
+				{
+					"name": "selectcol"
+				},
+				{
+					"name": "aggregateFlight"
+				},
+				{
+					"name": "RankingFlight"
+				},
+				{
+					"name": "filterLeast10"
+				},
+				{
+					"name": "alterRow1"
 				}
 			],
 			"scriptLines": [
@@ -78,6 +110,18 @@
 				"     format: 'delta',",
 				"     fileSystem: 'silver',",
 				"     folderPath: 'FactBooking') ~> FactBooking",
+				"source(output(",
+				"          flight_id as short,",
+				"          flight_number as string,",
+				"          departure_timestamp as string,",
+				"          arrival_time as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'DimFlight') ~> DimFlight",
 				"FactBooking, DimAirline join(FactBooking@airline_id == DimAirline@airline_id,",
 				"     joinType:'left',",
 				"     matchType:'exact',",
@@ -105,6 +149,34 @@
 				"     Top = denseRank()) ~> Ranking",
 				"Ranking filter(Top < 6) ~> filterTop5",
 				"filterTop5 alterRow(insertIf(1==1)) ~> alterRow",
+				"FactBooking, DimFlight join(FactBooking@flight_id == DimFlight@flight_id,",
+				"     joinType:'left',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> FlightJoin",
+				"FlightJoin select(mapColumn(",
+				"          booking_id,",
+				"          passenger_id,",
+				"          flight_id = FactBooking@flight_id,",
+				"          airline_id,",
+				"          origin_airport_id,",
+				"          destination_airport_id,",
+				"          booking_date,",
+				"          ticket_cost,",
+				"          flight_duration_mins,",
+				"          checkin_status,",
+				"          flight_number,",
+				"          departure_timestamp,",
+				"          arrival_time",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectcol",
+				"selectcol aggregate(groupBy(flight_duration_mins),",
+				"     TotalSales = sum(ticket_cost)) ~> aggregateFlight",
+				"aggregateFlight window(asc(TotalSales, true),",
+				"     Least = denseRank()) ~> RankingFlight",
+				"RankingFlight filter(Least<11) ~> filterLeast10",
+				"filterLeast10 alterRow(insertIf(1==1)) ~> alterRow1",
 				"alterRow sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
@@ -124,7 +196,26 @@
 				"     preCommands: [],",
 				"     postCommands: [],",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> sinkGold"
+				"     skipDuplicateMapOutputs: true) ~> sinkGold",
+				"alterRow1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'gold',",
+				"     folderPath: 'Businessimpact',",
+				"     overwrite: true,",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> sinkGoldFlight"
 			]
 		}
 	}
