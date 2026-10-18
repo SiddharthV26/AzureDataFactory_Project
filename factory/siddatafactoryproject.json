@@ -1,0 +1,15 @@
+{
+	"name": "siddatafactoryproject",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "fa5e3e14-c7e4-4c70-8d46-6bc75af74d60",
+		"tenantId": "3ade3897-5f0d-4e43-985d-9feddf98328b"
+	}
+}
